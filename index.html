@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aplikasi Retail Partnership</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--g:#0b6b3a;--gd:#084c2a;--y:#f2b705;--bg:#f4f7f3;--c:#fff;--t:#1d2b22;--m:#66756b;--l:#dbe4dd;--r:#c0392b}
+*{box-sizing:border-box}body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--t);font-size:14px}
+button,input,select,textarea{font:inherit}
+.top{background:var(--gd);color:#fff;padding:14px 16px;border-bottom:4px solid var(--y);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.top h1{margin:0;font-size:18px;font-weight:800}.top small{display:block;color:#cfe3d6;font-weight:400;margin-top:2px}
+.wrap{max-width:1000px;margin:0 auto;padding:14px}
+.card{background:var(--c);border:1px solid var(--l);border-radius:10px;padding:14px;margin-bottom:14px}
+.card h2{margin:0 0 10px;font-size:15px}
+.btn{background:var(--g);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer}
+.btn.o{background:transparent;color:#fff;border:1px solid #ffffff66}.btn.s{background:var(--c);color:var(--g);border:1px solid var(--g)}
+.btn.y{background:var(--y);color:#1d2b22}.btn.d{background:var(--r)}.btn.x{padding:4px 8px;font-size:12px}
+label{display:block;font-weight:600;font-size:12px;color:var(--m);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:9px;border:1px solid var(--l);border-radius:8px;background:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 14px}
+.st{display:flex;gap:6px}.st button{width:42px;border:1px solid var(--g);background:#fff;color:var(--g);border-radius:8px;font-size:18px;cursor:pointer}.st input{text-align:center}
+.cl{background:#fff8dc;border:1px solid var(--y);border-radius:10px;padding:2px 12px 12px;margin-top:12px}
+.cl b{display:block;margin-top:10px;color:#7a5b00}
+.tot{background:var(--bg);border-radius:8px;padding:8px 10px;margin-top:10px;font-weight:600}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--l);text-align:left;vertical-align:top}th{background:var(--bg);white-space:nowrap}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kp div{background:var(--c);border:1px solid var(--l);border-radius:10px;padding:12px}.kp span{display:block;color:var(--m);font-size:12px}.kp b{font-size:19px}
+.kp .hl{background:var(--g);color:#fff;border-color:var(--g)}.kp .hl span{color:#cfe3d6}
+.bar{margin:8px 0}.bar i{display:block;height:10px;background:var(--l);border-radius:6px;overflow:hidden}.bar i u{display:block;height:100%;background:var(--g)}
+.bar i u.y{background:var(--y)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}.tabs button{border:1px solid var(--l);background:#fff;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+.tabs button.on{background:var(--g);color:#fff;border-color:var(--g)}
+.bar2{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.bar2>*{width:auto;flex:1 1 140px}
+.login{max-width:380px;margin:8vh auto;padding:0 14px}
+.quote{color:var(--m);font-style:italic;font-size:12px;margin-top:12px;line-height:1.5}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--gd);color:#fff;padding:10px 16px;border-radius:8px;display:none;z-index:9}
+.warn{background:#fff3cd;border:1px solid var(--y);padding:8px 12px;border-radius:8px;margin:10px 14px;font-size:12px}
+.hide{display:none}
+</style></head><body>
+<div id="app"></div><div id="toast"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ===== PENGATURAN =====
+   Isi FIREBASE_CONFIG dengan konfigurasi web Firebase (disarankan proyek Firebase BARU
+   agar data aplikasi Aktivitas Sales yang lama tidak tercampur). Jika dikosongkan,
+   data hanya tersimpan di perangkat ini (localStorage). */
+const FIREBASE_CONFIG={apiKey:"",authDomain:"",projectId:"",storageBucket:"",messagingSenderId:"",appId:""};
+const PROGRAMS=["Zakat Maal","Zakat Profesi","Infak","Sedekah","Wakaf","Fidyah","Program Pendidikan","Program Kesehatan","Program Ekonomi","Program Dakwah","Qurban","Lainnya"];
+const JENIS=["call","ekspansi","probing","presentasi","closing","maintenance"];
+const BBM_CAP=300000, DEF_PIN="1234";
+const COL="rp_acts", CFG="rp_config/users", LS="rp_local_v1";
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rp=n=>'Rp '+(Math.round(n)||0).toLocaleString('id-ID');
+const pad=n=>String(n).padStart(2,'0');
+const fmt=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today=()=>fmt(new Date());
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2200)};
+const defUsers=()=>["M. Izzat","Vacant Retail","Dwi Prakoso","Azmi Hanif","Kevin"].map((n,i)=>({id:'u'+(i+1),name:n,pin:DEF_PIN,role:'sales',call:200,visit:60}))
+  .concat([{id:'admin',name:'Admin/Manager',pin:'0000',role:'admin',call:0,visit:0}]);
+
+let S={users:null,acts:[]},fs=null,me=sessionStorage.getItem('rp_me'),tab='dash',editId=null,fm='',mode='month',ref=today(),mon=today().slice(0,7);
+const cur=()=>S.users&&S.users.find(u=>u.id===me);
+
+/* ===== PENYIMPANAN ===== */
+function persist(){localStorage.setItem(LS,JSON.stringify(S))}
+function saveUsers(){fs?fs.doc(CFG).set({list:S.users}):persist()}
+function saveAct(a){fs?fs.collection(COL).doc(a.id).set(a):(S.acts=S.acts.filter(x=>x.id!==a.id).concat(a),persist(),draw())}
+function delAct(id){fs?fs.collection(COL).doc(id).delete():(S.acts=S.acts.filter(x=>x.id!==id),persist(),draw())}
+function init(){
+  if(FIREBASE_CONFIG.projectId){
+    firebase.initializeApp(FIREBASE_CONFIG);fs=firebase.firestore();
+    fs.doc(CFG).onSnapshot(d=>{if(d.exists)S.users=d.data().list;else{S.users=defUsers();saveUsers()}route(true)});
+    fs.collection(COL).onSnapshot(q=>{S.acts=q.docs.map(x=>x.data());draw()},e=>toast('Gagal sinkron: '+e.message));
+  }else{
+    const l=JSON.parse(localStorage.getItem(LS)||'null');S.users=l?l.users:defUsers();S.acts=l?l.acts:[];persist();route();
+  }
+}
+
+/* ===== PERHITUNGAN ===== */
+function inP(t,m,r){
+  if(m==='day')return t===r;
+  if(m==='month')return t.slice(0,7)===r.slice(0,7);
+  const d=new Date(r+'T00:00:00'),s=new Date(d);s.setDate(d.getDate()-((d.getDay()+6)%7));const e=new Date(s);e.setDate(s.getDate()+6);
+  return t>=fmt(s)&&t<=fmt(e);
+}
+function stats(L){const o={call:0,visit:0,closing:0,donasi:0,km:0,rp:0};
+  L.forEach(a=>{o.call+=a.call;o.visit+=a.visit;o.km+=a.km;o.rp+=a.rp;if(a.jenis==='closing'){o.closing++;o.donasi+=a.nominal}});return o}
+const scale=(t,m)=>m==='day'?t/20:m==='week'?t/4:t;
+const pct=(v,t)=>t>0?Math.min(100,v/t*100):0;
+const bar=(lbl,v,t,y)=>`<div class="bar"><div style="display:flex;justify-content:space-between"><span>${lbl}</span><b>${v} / ${Math.round(t)} (${Math.round(pct(v,t))}%)</b></div><i><u class="${y?'y':''}" style="width:${pct(v,t)}%"></u></i></div>`;
+
+/* ===== EKSPOR (CSV, terbuka di Excel) ===== */
+function exportCsv(L,name){
+  const h=["Tanggal","Anggota","Mitra","Alamat","Call","Visit","Jenis aktivitas","Program","Nominal donasi","Keterangan","KM awal","KM akhir","Total KM","Klaim BBM"];
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows=L.sort((a,b)=>a.tanggal.localeCompare(b.tanggal)).map(a=>[a.tanggal,a.name,a.mitra,a.alamat,a.call,a.visit,a.jenis,a.program,a.nominal,a.ket,a.kmA,a.kmB,a.km,a.rp].map(q).join(';'));
+  const b=new Blob(["\ufeff"+h.map(q).join(';')+"\n"+rows.join("\n")],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name+'.csv';a.click();
+}
+
+/* ===== TAMPILAN ===== */
+function route(soft){
+  if(!S.users)return;
+  if(!cur()){me=null;sessionStorage.removeItem('rp_me');return login()}
+  if(soft&&$('#data'))return draw();
+  cur().role==='admin'?viewAdmin():viewMember();
+}
+function login(){
+  const opts=S.users.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join('');
+  $('#app').innerHTML=`<div class="login"><div class="card" style="border-top:5px solid var(--y)">
+  <h1 style="margin:0;color:var(--g)">Aplikasi Retail Partnership</h1>
+  <p class="quote">Sales adalah proses. Setiap proses dapat diukur. Dan apa yang dapat diukur, dapat ditingkatkan (improved).</p>
+  <label>Nama</label><select id="lu">${opts}</select><label>PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="off">
+  <p><button class="btn" id="lb" style="width:100%">Masuk</button></p></div></div>`;
+  const go=()=>{const u=S.users.find(x=>x.id===$('#lu').value);if(u&&u.pin===$('#lp').value){me=u.id;sessionStorage.setItem('rp_me',me);tab='dash';route()}else toast('PIN salah')};
+  $('#lb').onclick=go;$('#lp').onkeydown=e=>e.key==='Enter'&&go();
+}
+function topbar(extra){return `<div class="top"><h1>Aplikasi Retail Partnership<small>${esc(cur().name)}</small></h1><div>${extra||''}<button class="btn o" id="bpin">Ganti PIN</button> <button class="btn o" id="bout">Keluar</button></div></div>
+${fs?'':'<div class="warn">Mode lokal: data hanya tersimpan di perangkat ini. Isi FIREBASE_CONFIG di index.html agar data terekap lintas perangkat.</div>'}`}
+function topEvents(){
+  $('#bout').onclick=()=>{me=null;sessionStorage.removeItem('rp_me');editId=null;route()};
+  $('#bpin').onclick=()=>{const u=cur();if(prompt('PIN lama')!==u.pin)return toast('PIN lama salah');
+    const n=prompt('PIN baru (minimal 4 angka)');if(!n||!/^\d{4,}$/.test(n))return toast('PIN baru tidak valid');u.pin=n;saveUsers();toast('PIN diganti')};
+}
+const stepper=(id,v=0)=>`<div class="st"><button type="button" data-t="${id}" data-d="-1">−</button><input id="${id}" type="number" min="0" value="${v}"><button type="button" data-t="${id}" data-d="1">+</button></div>`;
+
+/* --- Laman anggota --- */
+function viewMember(){
+  $('#app').innerHTML=topbar()+`<div class="wrap">
+  <div class="card"><h2 id="ft">Catat aktivitas mitra</h2>
+   <div class="grid"><div><label>Tanggal</label><input id="tgl" type="date" value="${today()}"></div>
+   <div><label>Nama mitra</label><input id="mitra" autocomplete="off"></div>
+   <div><label>Alamat mitra</label><input id="alamat" autocomplete="off"></div></div>
+   <div class="grid"><div><label>Call</label>${stepper('call')}</div><div><label>Visit</label>${stepper('visit')}</div>
+   <div><label>Jenis aktivitas</label><select id="jenis">${JENIS.map(j=>`<option>${j}</option>`).join('')}</select></div></div>
+   <div class="cl hide" id="clBox"><b>Closing: donasi mitra</b><div class="grid">
+    <div><label>Program donasi</label><select id="program"><option value="">Pilih program</option>${PROGRAMS.map(p=>`<option>${p}</option>`).join('')}</select></div>
+    <div><label>Nominal donasi (Rp)</label><input id="nominal" type="number" min="0" inputmode="numeric" placeholder="0"></div></div></div>
+   <label>Keterangan aktivitas</label><textarea id="ket" rows="3"></textarea>
+   <div class="grid"><div><label>KM awal</label>${stepper('kmA')}</div><div><label>KM akhir</label>${stepper('kmB')}</div></div>
+   <div class="tot" id="tot"></div>
+   <p><button class="btn" id="save">Simpan</button> <button class="btn s hide" id="cancel">Batal edit</button></p></div>
+  <div class="card"><div class="bar2"><div style="flex:2;align-self:center"><h2 style="margin:0">Rekap bulanan</h2></div><input type="month" id="mon" value="${mon}"><button class="btn s" id="exp">Ekspor Excel</button></div><div id="data"></div></div></div>`;
+  topEvents();
+  const calc=()=>{const km=Math.max(0,(+$('#kmB').value||0)-(+$('#kmA').value||0));$('#tot').textContent=`Total KM: ${km} · Klaim BBM mitra ini: ${rp(km/12*10000)}`;
+    $('#clBox').classList.toggle('hide',$('#jenis').value!=='closing')};
+  const f=$('#app');f.oninput=calc;f.onchange=calc;
+  f.onclick=e=>{const b=e.target.closest('[data-t]');if(b){const i=$('#'+b.dataset.t);i.value=Math.max(0,(+i.value||0)+(+b.dataset.d));calc()}};
+  $('#save').onclick=saveForm;$('#cancel').onclick=()=>{editId=null;resetForm()};
+  $('#mon').onchange=e=>{mon=e.target.value||mon;draw()};
+  $('#exp').onclick=()=>exportCsv(myList(),'Retail-Partnership-'+cur().name+'-'+mon);
+  calc();draw();
+}
+const myList=()=>S.acts.filter(a=>a.uid===me&&a.tanggal.slice(0,7)===mon);
+function resetForm(){['mitra','alamat','ket','nominal'].forEach(i=>$('#'+i).value='');['call','visit','kmA','kmB'].forEach(i=>$('#'+i).value=0);
+  $('#jenis').value='call';$('#program').value='';$('#ft').textContent='Catat aktivitas mitra';$('#cancel').classList.add('hide');$('#clBox').classList.add('hide');
+  $('#tot').textContent='Total KM: 0 · Klaim BBM mitra ini: Rp 0'}
+function saveForm(){
+  const mitra=$('#mitra').value.trim(),jenis=$('#jenis').value,nominal=+$('#nominal').value||0,program=$('#program').value;
+  if(!mitra)return toast('Nama mitra wajib diisi');
+  if(jenis==='closing'&&(!program||nominal<=0))return toast('Closing: pilih program dan isi nominal donasi');
+  const kmA=+$('#kmA').value||0,kmB=+$('#kmB').value||0,km=Math.max(0,kmB-kmA),u=cur(),old=S.acts.find(x=>x.id===editId);
+  const a={id:editId||Date.now().toString(36)+Math.random().toString(36).slice(2,6),uid:u.id,name:u.name,tanggal:$('#tgl').value||today(),mitra,alamat:$('#alamat').value.trim(),
+    call:+$('#call').value||0,visit:+$('#visit').value||0,jenis,program:jenis==='closing'?program:'',nominal:jenis==='closing'?nominal:0,ket:$('#ket').value.trim(),
+    kmA,kmB,km,rp:Math.round(km/12*10000),ts:old?old.ts:Date.now()};
+  saveAct(a);editId=null;resetForm();toast('Tersimpan');
+}
+function drawMember(){
+  const u=cur(),L=myList(),s=stats(L),claim=Math.min(s.rp,BBM_CAP);
+  $('#data').innerHTML=`<div class="kp"><div class="hl"><span>Total donasi closing</span><b>${rp(s.donasi)}</b></div><div><span>Jumlah closing</span><b>${s.closing}</b></div><div><span>Klaim BBM (maks ${rp(BBM_CAP)})</span><b>${rp(claim)}</b></div></div>
+  ${bar('Call',s.call,u.call)}${bar('Visit',s.visit,u.visit)}${bar('Klaim BBM',claim,BBM_CAP,1)}
+  <div class="tw"><table><tr><th>Tanggal</th><th>Mitra</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>KM</th><th>BBM</th><th>Keterangan</th><th></th></tr>
+  ${L.sort((a,b)=>b.tanggal.localeCompare(a.tanggal)||b.ts-a.ts).map(a=>`<tr><td>${a.tanggal}</td><td>${esc(a.mitra)}<br><small>${esc(a.alamat)}</small></td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${a.km}</td><td>${rp(a.rp)}</td><td>${esc(a.ket)}</td>
+  <td><button class="btn s x" data-e="${a.id}">Edit</button> <button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')||'<tr><td colspan="11">Belum ada aktivitas bulan ini. Isi formulir di atas lalu tekan Simpan.</td></tr>'}</table></div>`;
+  $('#data').onclick=e=>{const x=e.target.dataset;
+    if(x.x&&confirm('Hapus aktivitas ini?'))delAct(x.x);
+    if(x.e){const a=S.acts.find(z=>z.id===x.e);editId=a.id;
+      ['tgl:tanggal','mitra:mitra','alamat:alamat','call:call','visit:visit','jenis:jenis','program:program','nominal:nominal','ket:ket','kmA:kmA','kmB:kmB'].forEach(p=>{const[i,k]=p.split(':');$('#'+i).value=a[k]||(typeof a[k]==='number'?0:'')});
+      $('#clBox').classList.toggle('hide',a.jenis!=='closing');$('#tot').textContent=`Total KM: ${a.km} · Klaim BBM mitra ini: ${rp(a.rp)}`;
+      $('#ft').textContent='Edit aktivitas';$('#cancel').classList.remove('hide');scrollTo({top:0,behavior:'smooth'})}};
+}
+
+/* --- Laman admin/manager --- */
+function viewAdmin(){
+  $('#app').innerHTML=topbar()+`<div class="wrap"><div class="tabs">${[['dash','Dashboard'],['closing','Closing & Donasi'],['mon','Monitoring Mitra'],['users','Anggota & PIN']].map(t=>`<button data-tab="${t[0]}" class="${t[0]===tab?'on':''}">${t[1]}</button>`).join('')}</div>
+  <div class="bar2"><select id="mode"><option value="day">Harian</option><option value="week">Mingguan</option><option value="month">Bulanan</option></select><input type="date" id="ref" value="${ref}"><button class="btn s" id="exp">Ekspor Excel</button></div>
+  <div id="data"></div></div>`;
+  topEvents();$('#mode').value=mode;
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('on',x===b));draw(true)});
+  $('#mode').onchange=e=>{mode=e.target.value;draw(true)};$('#ref').onchange=e=>{ref=e.target.value||today();draw(true)};
+  $('#exp').onclick=()=>exportCsv(pList(),'Retail-Partnership-'+mode+'-'+ref);
+  draw(true);
+}
+const pList=()=>S.acts.filter(a=>inP(a.tanggal,mode,ref));
+function drawAdmin(force){
+  if(tab==='users'&&!force)return;
+  const L=pList(),sales=S.users.filter(u=>u.role==='sales'),D=$('#data');
+  if(tab==='dash'){
+    const s=stats(L),rows=sales.map(u=>{const x=stats(L.filter(a=>a.uid===u.id)),pc=pct(x.call,scale(u.call,mode)),pv=pct(x.visit,scale(u.visit,mode));
+      return{u,x,pc,pv,avg:(pc+pv)/2,claim:mode==='month'?Math.min(x.rp,BBM_CAP):x.rp}});
+    const avg=rows.length?rows.reduce((a,r)=>a+r.avg,0)/rows.length:0,bbm=rows.reduce((a,r)=>a+r.claim,0);
+    const pr={};L.filter(a=>a.jenis==='closing').forEach(a=>{const p=a.program||'-';pr[p]=pr[p]||{n:0,v:0};pr[p].n++;pr[p].v+=a.nominal});
+    D.innerHTML=`<div class="kp"><div class="hl"><span>Total donasi closing</span><b>${rp(s.donasi)}</b></div><div><span>Jumlah closing</span><b>${s.closing}</b></div><div><span>Rata-rata pencapaian</span><b>${Math.round(avg)}%</b></div><div><span>Total klaim BBM</span><b>${rp(bbm)}</b></div></div>
+    <div class="card"><h2>Pencapaian per anggota</h2><div class="tw"><table><tr><th>Anggota</th><th>Call</th><th>% Call</th><th>Visit</th><th>% Visit</th><th>Closing</th><th>Donasi</th><th>Total KM</th><th>Klaim BBM</th></tr>
+    ${rows.map(r=>`<tr><td>${esc(r.u.name)}</td><td>${r.x.call}</td><td>${Math.round(r.pc)}%</td><td>${r.x.visit}</td><td>${Math.round(r.pv)}%</td><td>${r.x.closing}</td><td>${rp(r.x.donasi)}</td><td>${r.x.km}</td><td>${rp(r.claim)}</td></tr>`).join('')}</table></div></div>
+    <div class="card"><h2>Donasi per program</h2><div class="tw"><table><tr><th>Program</th><th>Closing</th><th>Nominal</th></tr>${Object.entries(pr).sort((a,b)=>b[1].v-a[1].v).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.n}</td><td>${rp(v.v)}</td></tr>`).join('')||'<tr><td colspan="3">Belum ada closing pada periode ini.</td></tr>'}</table></div></div>`;
+  }else if(tab==='closing'){
+    const C=L.filter(a=>a.jenis==='closing').sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
+    D.innerHTML=`<div class="card"><h2>Closing & donasi · total ${rp(C.reduce((a,c)=>a+c.nominal,0))}</h2><div class="tw"><table><tr><th>Tanggal</th><th>Anggota</th><th>Mitra</th><th>Program</th><th>Nominal</th><th>Keterangan</th></tr>
+    ${C.map(a=>`<tr><td>${a.tanggal}</td><td>${esc(a.name)}</td><td>${esc(a.mitra)}</td><td>${esc(a.program)}</td><td>${rp(a.nominal)}</td><td>${esc(a.ket)}</td></tr>`).join('')||'<tr><td colspan="6">Belum ada closing pada periode ini.</td></tr>'}</table></div></div>`;
+  }else if(tab==='mon'){
+    const M=L.filter(a=>!fm||a.uid===fm).sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
+    D.innerHTML=`<div class="card"><h2>Monitoring mitra</h2><select id="fm" style="margin-bottom:10px"><option value="">Semua anggota</option>${sales.map(u=>`<option value="${u.id}" ${u.id===fm?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
+    <div class="tw"><table><tr><th>Mitra</th><th>Tanggal</th><th>Anggota</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>Keterangan</th><th></th></tr>
+    ${M.map(a=>`<tr><td>${esc(a.mitra)}</td><td>${a.tanggal}</td><td>${esc(a.name)}</td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${esc(a.ket)}</td><td><button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')||'<tr><td colspan="10">Belum ada aktivitas pada periode ini.</td></tr>'}</table></div></div>`;
+    $('#fm').onchange=e=>{fm=e.target.value;drawAdmin(true)};
+    D.onclick=e=>{if(e.target.dataset.x&&confirm('Hapus aktivitas ini?'))delAct(e.target.dataset.x)};
+  }else{
+    D.innerHTML=`<div class="card"><h2>Anggota, PIN & target bulanan</h2><div class="tw"><table id="ut"><tr><th>Nama</th><th>PIN</th><th>Target call</th><th>Target visit</th><th></th></tr>
+    ${S.users.map(u=>`<tr data-id="${u.id}" data-role="${u.role}"><td><input class="un" value="${esc(u.name)}"></td><td><input class="up" value="${esc(u.pin)}" inputmode="numeric"></td>
+    <td>${u.role==='sales'?`<input class="uc" type="number" value="${u.call}">`:''}</td><td>${u.role==='sales'?`<input class="uv" type="number" value="${u.visit}">`:''}</td>
+    <td>${u.role==='sales'?'<button class="btn d x" data-del="1">Hapus</button>':''}</td></tr>`).join('')}</table></div>
+    <p><button class="btn s" id="add">Tambah anggota</button> <button class="btn" id="su">Simpan</button></p></div>`;
+    const collect=()=>[...D.querySelectorAll('tr[data-id]')].map(r=>({id:r.dataset.id,role:r.dataset.role,name:r.querySelector('.un').value.trim()||'Tanpa nama',pin:r.querySelector('.up').value.trim()||DEF_PIN,
+      call:+(r.querySelector('.uc')?.value)||0,visit:+(r.querySelector('.uv')?.value)||0}));
+    $('#su').onclick=()=>{S.users=collect();saveUsers();toast('Tersimpan')};
+    $('#add').onclick=()=>{S.users=collect();S.users.splice(S.users.length-1,0,{id:'u'+Date.now().toString(36),name:'Anggota baru',pin:DEF_PIN,role:'sales',call:200,visit:60});drawAdmin(true)};
+    D.onclick=e=>{if(e.target.dataset.del&&confirm('Hapus anggota ini? Aktivitas lamanya tetap tersimpan.')){const id=e.target.closest('tr').dataset.id;S.users=collect().filter(u=>u.id!==id);saveUsers();drawAdmin(true)}};
+  }
+}
+function draw(force){if(!cur()||!$('#data'))return;cur().role==='admin'?drawAdmin(force):drawMember()}
+init();
+</script></body></html>
