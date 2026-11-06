@@ -212,7 +212,12 @@ function drawAdmin(force){
     D.innerHTML=`<div class="kp"><div class="hl"><span>Total donasi closing</span><b>${rp(s.donasi)}</b></div><div><span>Jumlah closing</span><b>${s.closing}</b></div><div><span>Rata-rata pencapaian</span><b>${Math.round(avg)}%</b></div><div><span>Total klaim BBM</span><b>${rp(bbm)}</b></div></div>
     <div class="card"><h2>Pencapaian per anggota</h2><div class="tw"><table><tr><th>Anggota</th><th>Call</th><th>% Call</th><th>Visit</th><th>% Visit</th><th>Closing</th><th>Donasi</th><th>Total KM</th><th>Klaim BBM</th></tr>
     ${rows.map(r=>`<tr><td>${esc(r.u.name)}</td><td>${r.x.call}</td><td>${Math.round(r.pc)}%</td><td>${r.x.visit}</td><td>${Math.round(r.pv)}%</td><td>${r.x.closing}</td><td>${rp(r.x.donasi)}</td><td>${r.x.km}</td><td>${rp(r.claim)}</td></tr>`).join('')}</table></div></div>
-    <div class="card"><h2>Donasi per program</h2><div class="tw"><table><tr><th>Program</th><th>Closing</th><th>Nominal</th></tr>${Object.entries(pr).sort((a,b)=>b[1].v-a[1].v).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.n}</td><td>${rp(v.v)}</td></tr>`).join('')||'<tr><td colspan="3">Belum ada closing pada periode ini.</td></tr>'}</table></div></div>`;
+    <div class="card"><h2>Donasi per program</h2><div class="tw"><table><tr><th>Program</th><th>Closing</th><th>Nominal</th></tr>${Object.entries(pr).sort((a,b)=>b[1].v-a[1].v).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.n}</td><td>${rp(v.v)}</td></tr>`).join('')||'<tr><td colspan="3">Belum ada closing pada periode ini.</td></tr>'}</table></div></div>
+    <div class="card"><h2>Aktivitas per mitra dari setiap sales</h2><p style="margin:0 0 8px;color:var(--m)">Mengikuti periode di atas (harian, mingguan, atau bulanan). Klik nama mitra untuk melihat semua aktivitasnya.</p>
+    <select id="fm"><option value="">Semua anggota</option>${sales.map(u=>`<option value="${u.id}" ${u.id===fm?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>
+    ${mitraBlocks(L,sales)}`;
+    $('#fm').onchange=e=>{fm=e.target.value;drawAdmin(true)};
+    D.onclick=e=>{if(e.target.dataset.x&&confirm('Hapus aktivitas ini?'))delAct(e.target.dataset.x)};
   }else if(tab==='closing'){
     const C=L.filter(a=>a.jenis==='closing').sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
     D.innerHTML=`<div class="card"><h2>Closing & donasi · total ${rp(C.reduce((a,c)=>a+c.nominal,0))}</h2><div class="tw"><table><tr><th>Tanggal</th><th>Anggota</th><th>Mitra</th><th>Program</th><th>Nominal</th><th>Keterangan</th></tr>
@@ -236,6 +241,17 @@ function drawAdmin(force){
     $('#add').onclick=()=>{S.users=collect();S.users.splice(S.users.length-1,0,{id:'u'+Date.now().toString(36),name:'Anggota baru',pin:DEF_PIN,role:'sales',call:200,visit:60});drawAdmin(true)};
     D.onclick=e=>{if(e.target.dataset.del&&confirm('Hapus anggota ini? Aktivitas lamanya tetap tersimpan.')){const id=e.target.closest('tr').dataset.id;S.users=collect().filter(u=>u.id!==id);saveUsers();drawAdmin(true)}};
   }
+}
+function mitraBlocks(L,sales){
+  return sales.filter(u=>!fm||u.id===fm).map(u=>{
+    const al=L.filter(a=>a.uid===u.id),gm={};
+    al.forEach(a=>{const k=(a.mitra||'').trim().toLowerCase();(gm[k]=gm[k]||[]).push(a)});
+    const sx=stats(al),blocks=Object.values(gm).sort((a,b)=>a[0].mitra.localeCompare(b[0].mitra)).map(g=>{
+      g.sort((a,b)=>b.tanggal.localeCompare(a.tanggal)||b.ts-a.ts);const x=stats(g);
+      return `<details style="border-top:1px solid var(--l);padding:8px 0"><summary style="cursor:pointer"><b>${esc(g[0].mitra)}</b> · call ${x.call} · visit ${x.visit} · closing ${x.closing}${x.donasi?' · '+rp(x.donasi):''} · terakhir ${g[0].tanggal}</summary>
+      <div class="tw"><table><tr><th>Tanggal</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>KM</th><th>Keterangan</th><th></th></tr>
+      ${g.map(a=>`<tr><td>${a.tanggal}</td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${a.km}</td><td>${esc(a.ket)}</td><td><button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')}</table></div></details>`}).join('');
+    return `<div class="card"><h2>${esc(u.name)} · ${Object.keys(gm).length} mitra · call ${sx.call} · visit ${sx.visit} · closing ${sx.closing} · donasi ${rp(sx.donasi)}</h2>${blocks||'<p style="margin:0;color:var(--m)">Belum ada aktivitas pada periode ini.</p>'}</div>`}).join('');
 }
 function draw(force){if(!cur()||!$('#data'))return;cur().role==='admin'?drawAdmin(force):drawMember()}
 init();
