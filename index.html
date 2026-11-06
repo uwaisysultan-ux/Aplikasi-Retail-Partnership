@@ -114,10 +114,10 @@ function login(){
   $('#app').innerHTML=`<div class="login"><div class="card" style="border-top:5px solid var(--y)">
   <h1 style="margin:0;color:var(--g)">Aplikasi Retail Partnership</h1>
   <p class="quote">Sales adalah proses. Setiap proses dapat diukur. Dan apa yang dapat diukur, dapat ditingkatkan (improved).</p>
-  <label>Nama</label><select id="lu">${opts}</select><label>PIN</label><input id="lp" type="text" name="rp-kode-akses" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" style="-webkit-text-security:disc;text-security:disc">
+  <label>Nama</label><select id="lu">${opts}</select><label>PIN</label><input id="lp" type="tel" name="rp-kode-akses" inputmode="numeric" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ketik PIN">
   <p><button class="btn" id="lb" style="width:100%">Masuk</button></p></div></div>`;
   const go=()=>{const u=S.users.find(x=>x.id===$('#lu').value);if(u&&u.pin===$('#lp').value){me=u.id;sessionStorage.setItem('rp_me',me);tab='dash';route()}else toast('PIN salah')};
-  $('#lp').value='';setTimeout(()=>{$('#lp').value=''},300);$('#lb').onclick=go;$('#lp').onkeydown=e=>e.key==='Enter'&&go();
+  $('#lb').onclick=go;$('#lp').onkeydown=e=>e.key==='Enter'&&go();
 }
 function topbar(extra){return `<div class="top"><h1>Aplikasi Retail Partnership<small>${esc(cur().name)}</small></h1><div>${extra||''}<button class="btn o" id="bpin">Ganti PIN</button> <button class="btn o" id="bout">Keluar</button></div></div>
 ${fs?'':'<div class="warn">Mode lokal: data hanya tersimpan di perangkat ini. Isi FIREBASE_CONFIG di index.html agar data terekap lintas perangkat.</div>'}`}
