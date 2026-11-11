@@ -41,6 +41,7 @@ th,td{padding:7px 8px;border-bottom:1px solid var(--l);text-align:left;vertical-
 <div id="app"></div><div id="toast"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script>
 /* ===== PENGATURAN =====
    Isi FIREBASE_CONFIG dengan konfigurasi web Firebase (disarankan proyek Firebase BARU
@@ -69,7 +70,7 @@ const cur=()=>S.users&&S.users.find(u=>u.id===me);
 function persist(){localStorage.setItem(LS,JSON.stringify(S))}
 function saveUsers(){fs?fs.doc(CFG).set({list:S.users}):persist()}
 function saveAct(a){fs?fs.collection(COL).doc(a.id).set(a):(S.acts=S.acts.filter(x=>x.id!==a.id).concat(a),persist(),draw())}
-function delAct(id){fs?fs.collection(COL).doc(id).delete():(S.acts=S.acts.filter(x=>x.id!==id),persist(),draw())}
+function delAct(id){setPhotos(id,[]).catch(()=>{});fs?fs.collection(COL).doc(id).delete():(S.acts=S.acts.filter(x=>x.id!==id),persist(),draw())}
 function init(){
   if(FIREBASE_CONFIG.projectId){
     firebase.initializeApp(FIREBASE_CONFIG);fs=firebase.firestore();
@@ -146,6 +147,7 @@ function viewMember(){
     <div><label>Program donasi</label><select id="program"><option value="">Pilih program</option>${PROGRAMS.map(p=>`<option>${p}</option>`).join('')}</select></div>
     <div><label>Nominal donasi (Rp)</label><input id="nominal" type="number" min="0" inputmode="numeric" placeholder="0"></div></div></div>
    <label>Keterangan aktivitas</label><textarea id="ket" rows="3"></textarea>
+   <label>Foto kunjungan (maks. 3 foto)</label><input id="foto" type="file" accept="image/*" multiple><div id="thumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"></div>
    <div class="grid"><div><label>KM awal</label>${stepper('kmA')}</div><div><label>KM akhir</label>${stepper('kmB')}</div></div>
    <div class="tot" id="tot"></div>
    <p><button class="btn" id="save">Simpan</button> <button class="btn s hide" id="cancel">Batal edit</button></p></div>
@@ -154,17 +156,20 @@ function viewMember(){
   const calc=()=>{const km=Math.max(0,(+$('#kmB').value||0)-(+$('#kmA').value||0));$('#tot').textContent=`Total KM: ${km} · Klaim BBM mitra ini: ${rp(km/12*10000)}`;
     $('#clBox').classList.toggle('hide',$('#jenis').value!=='closing')};
   const f=$('#app');f.oninput=calc;f.onchange=calc;
-  f.onclick=e=>{const b=e.target.closest('[data-t]');if(b){const i=$('#'+b.dataset.t);i.value=Math.max(0,(+i.value||0)+(+b.dataset.d));calc()}};
-  $('#save').onclick=saveForm;$('#cancel').onclick=()=>{editId=null;resetForm()};
+  f.onclick=e=>{const r=e.target.closest('[data-rm]');if(r){photos.splice(+r.dataset.rm,1);thumbs();return}const b=e.target.closest('[data-t]');if(b){const i=$('#'+b.dataset.t);i.value=Math.max(0,(+i.value||0)+(+b.dataset.d));calc()}};
+  $('#save').onclick=saveForm;
+  $('#foto').onchange=async e=>{for(const f of e.target.files){if(photos.length>=3){toast('Maksimal 3 foto');break}
+    try{const d=await compress(f);if(photos.reduce((n,x)=>n+x.length,0)+d.length>850000){toast('Ukuran foto terlalu besar');break}photos.push(d)}catch(_){toast('Foto tidak bisa dibaca')}}
+    e.target.value='';thumbs()};$('#cancel').onclick=()=>{editId=null;resetForm()};
   $('#mon').onchange=e=>{mon=e.target.value||mon;draw()};
-  $('#exp').onclick=()=>exportCsv(myList(),'Retail-Partnership-'+cur().name+'-'+mon);
+  $('#exp').onclick=()=>exportData(myList(),'Retail-Partnership-'+cur().name+'-'+mon);
   calc();draw();
 }
 const myList=()=>S.acts.filter(a=>a.uid===me&&a.tanggal.slice(0,7)===mon);
 function resetForm(){['mitra','alamat','ket','nominal'].forEach(i=>$('#'+i).value='');['call','visit','kmA','kmB'].forEach(i=>$('#'+i).value=0);
   $('#jenis').value='call';$('#program').value='';$('#ft').textContent='Catat aktivitas mitra';$('#cancel').classList.add('hide');$('#clBox').classList.add('hide');
-  $('#tot').textContent='Total KM: 0 · Klaim BBM mitra ini: Rp 0'}
-function saveForm(){
+  $('#tot').textContent='Total KM: 0 · Klaim BBM mitra ini: Rp 0';photos=[];thumbs()}
+async function saveForm(){
   const mitra=$('#mitra').value.trim(),jenis=$('#jenis').value,nominal=+$('#nominal').value||0,program=$('#program').value;
   if(!mitra)return toast('Nama mitra wajib diisi');
   if(jenis==='closing'&&(!program||nominal<=0))return toast('Closing: pilih program dan isi nominal donasi');
@@ -172,21 +177,22 @@ function saveForm(){
   const a={id:editId||Date.now().toString(36)+Math.random().toString(36).slice(2,6),uid:u.id,name:u.name,tanggal:$('#tgl').value||today(),mitra,alamat:$('#alamat').value.trim(),
     call:+$('#call').value||0,visit:+$('#visit').value||0,jenis,program:jenis==='closing'?program:'',nominal:jenis==='closing'?nominal:0,ket:$('#ket').value.trim(),
     kmA,kmB,km,rp:Math.round(km/12*10000),ts:old?old.ts:Date.now()};
+  a.nfoto=photos.length;try{await setPhotos(a.id,photos)}catch(e){return toast('Foto gagal disimpan: '+e.message)}
   saveAct(a);editId=null;resetForm();toast('Tersimpan');
 }
 function drawMember(){
   const u=cur(),L=myList(),s=stats(L),claim=Math.min(s.rp,BBM_CAP);
   $('#data').innerHTML=`<div class="kp"><div class="hl"><span>Total donasi closing</span><b>${rp(s.donasi)}</b></div><div><span>Jumlah closing</span><b>${s.closing}</b></div><div><span>Klaim BBM (maks ${rp(BBM_CAP)})</span><b>${rp(claim)}</b></div></div>
   ${bar('Call',s.call,u.call)}${bar('Visit',s.visit,u.visit)}${bar('Klaim BBM',claim,BBM_CAP,1)}
-  <div class="tw"><table><tr><th>Tanggal</th><th>Mitra</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>KM</th><th>BBM</th><th>Keterangan</th><th></th></tr>
-  ${L.sort((a,b)=>b.tanggal.localeCompare(a.tanggal)||b.ts-a.ts).map(a=>`<tr><td>${a.tanggal}</td><td>${esc(a.mitra)}<br><small>${esc(a.alamat)}</small></td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${a.km}</td><td>${rp(a.rp)}</td><td>${esc(a.ket)}</td>
-  <td><button class="btn s x" data-e="${a.id}">Edit</button> <button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')||'<tr><td colspan="11">Belum ada aktivitas bulan ini. Isi formulir di atas lalu tekan Simpan.</td></tr>'}</table></div>`;
+  <div class="tw"><table><tr><th>Tanggal</th><th>Mitra</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>KM</th><th>BBM</th><th>Keterangan</th><th>Foto</th><th></th></tr>
+  ${L.sort((a,b)=>b.tanggal.localeCompare(a.tanggal)||b.ts-a.ts).map(a=>`<tr><td>${a.tanggal}</td><td>${esc(a.mitra)}<br><small>${esc(a.alamat)}</small></td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${a.km}</td><td>${rp(a.rp)}</td><td>${esc(a.ket)}</td><td>${a.nfoto?`<button class="btn s x" data-p="${a.id}">📷 ${a.nfoto}</button>`:''}</td>
+  <td><button class="btn s x" data-e="${a.id}">Edit</button> <button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')||'<tr><td colspan="12">Belum ada aktivitas bulan ini. Isi formulir di atas lalu tekan Simpan.</td></tr>'}</table></div>`;
   $('#data').onclick=e=>{const x=e.target.dataset;
     if(x.x&&confirm('Hapus aktivitas ini?'))delAct(x.x);
     if(x.e){const a=S.acts.find(z=>z.id===x.e);editId=a.id;
       ['tgl:tanggal','mitra:mitra','alamat:alamat','call:call','visit:visit','jenis:jenis','program:program','nominal:nominal','ket:ket','kmA:kmA','kmB:kmB'].forEach(p=>{const[i,k]=p.split(':');$('#'+i).value=a[k]||(typeof a[k]==='number'?0:'')});
       $('#clBox').classList.toggle('hide',a.jenis!=='closing');$('#tot').textContent=`Total KM: ${a.km} · Klaim BBM mitra ini: ${rp(a.rp)}`;
-      $('#ft').textContent='Edit aktivitas';$('#cancel').classList.remove('hide');scrollTo({top:0,behavior:'smooth'})}};
+      photos=[];thumbs();if(a.nfoto)getPhotos(a.id).then(l=>{photos=l;thumbs()});$('#ft').textContent='Edit aktivitas';$('#cancel').classList.remove('hide');scrollTo({top:0,behavior:'smooth'})}};
 }
 
 /* --- Laman admin/manager --- */
@@ -197,7 +203,7 @@ function viewAdmin(){
   topEvents();$('#mode').value=mode;
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('on',x===b));draw(true)});
   $('#mode').onchange=e=>{mode=e.target.value;draw(true)};$('#ref').onchange=e=>{ref=e.target.value||today();draw(true)};
-  $('#exp').onclick=()=>exportCsv(pList(),'Retail-Partnership-'+mode+'-'+ref);
+  $('#exp').onclick=()=>exportData(pList(),'Retail-Partnership-'+mode+'-'+ref);
   draw(true);
 }
 const pList=()=>S.acts.filter(a=>inP(a.tanggal,mode,ref));
@@ -225,8 +231,8 @@ function drawAdmin(force){
   }else if(tab==='mon'){
     const M=L.filter(a=>!fm||a.uid===fm).sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
     D.innerHTML=`<div class="card"><h2>Monitoring mitra</h2><select id="fm" style="margin-bottom:10px"><option value="">Semua anggota</option>${sales.map(u=>`<option value="${u.id}" ${u.id===fm?'selected':''}>${esc(u.name)}</option>`).join('')}</select>
-    <div class="tw"><table><tr><th>Mitra</th><th>Tanggal</th><th>Anggota</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>Keterangan</th><th></th></tr>
-    ${M.map(a=>`<tr><td>${esc(a.mitra)}</td><td>${a.tanggal}</td><td>${esc(a.name)}</td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${esc(a.ket)}</td><td><button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')||'<tr><td colspan="10">Belum ada aktivitas pada periode ini.</td></tr>'}</table></div></div>`;
+    <div class="tw"><table><tr><th>Mitra</th><th>Tanggal</th><th>Anggota</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>Keterangan</th><th>Foto</th><th></th></tr>
+    ${M.map(a=>`<tr><td>${esc(a.mitra)}</td><td>${a.tanggal}</td><td>${esc(a.name)}</td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${esc(a.ket)}</td><td>${a.nfoto?`<button class="btn s x" data-p="${a.id}">📷 ${a.nfoto}</button>`:''}</td><td><button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')||'<tr><td colspan="11">Belum ada aktivitas pada periode ini.</td></tr>'}</table></div></div>`;
     $('#fm').onchange=e=>{fm=e.target.value;drawAdmin(true)};
     D.onclick=e=>{if(e.target.dataset.x&&confirm('Hapus aktivitas ini?'))delAct(e.target.dataset.x)};
   }else{
@@ -249,10 +255,57 @@ function mitraBlocks(L,sales){
     const sx=stats(al),blocks=Object.values(gm).sort((a,b)=>a[0].mitra.localeCompare(b[0].mitra)).map(g=>{
       g.sort((a,b)=>b.tanggal.localeCompare(a.tanggal)||b.ts-a.ts);const x=stats(g);
       return `<details style="border-top:1px solid var(--l);padding:8px 0"><summary style="cursor:pointer"><b>${esc(g[0].mitra)}</b> · call ${x.call} · visit ${x.visit} · closing ${x.closing}${x.donasi?' · '+rp(x.donasi):''} · terakhir ${g[0].tanggal}</summary>
-      <div class="tw"><table><tr><th>Tanggal</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>KM</th><th>Keterangan</th><th></th></tr>
-      ${g.map(a=>`<tr><td>${a.tanggal}</td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${a.km}</td><td>${esc(a.ket)}</td><td><button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')}</table></div></details>`}).join('');
+      <div class="tw"><table><tr><th>Tanggal</th><th>Call</th><th>Visit</th><th>Jenis</th><th>Program</th><th>Donasi</th><th>KM</th><th>Keterangan</th><th>Foto</th><th></th></tr>
+      ${g.map(a=>`<tr><td>${a.tanggal}</td><td>${a.call}</td><td>${a.visit}</td><td>${a.jenis}</td><td>${esc(a.program)}</td><td>${a.nominal?rp(a.nominal):''}</td><td>${a.km}</td><td>${esc(a.ket)}</td><td>${a.nfoto?`<button class="btn s x" data-p="${a.id}">📷 ${a.nfoto}</button>`:''}</td><td><button class="btn d x" data-x="${a.id}">Hapus</button></td></tr>`).join('')}</table></div></details>`}).join('');
     return `<div class="card"><h2>${esc(u.name)} · ${Object.keys(gm).length} mitra · call ${sx.call} · visit ${sx.visit} · closing ${sx.closing} · donasi ${rp(sx.donasi)}</h2>${blocks||'<p style="margin:0;color:var(--m)">Belum ada aktivitas pada periode ini.</p>'}</div>`}).join('');
 }
 function draw(force){if(!cur()||!$('#data'))return;cur().role==='admin'?drawAdmin(force):drawMember()}
+/* ===== FOTO ===== */
+let photos=[];const LSP='rp_photos_v1',PH='rp_photos';
+async function getPhotos(id){
+  if(fs){const d=await fs.collection(PH).doc(id).get();return d.exists?d.data().list:[]}
+  return (JSON.parse(localStorage.getItem(LSP)||'{}'))[id]||[];
+}
+async function setPhotos(id,list){
+  if(fs){const r=fs.collection(PH).doc(id);if(list.length)await r.set({list});else await r.delete();return}
+  const m=JSON.parse(localStorage.getItem(LSP)||'{}');if(list.length)m[id]=list;else delete m[id];
+  try{localStorage.setItem(LSP,JSON.stringify(m))}catch(e){toast('Penyimpanan perangkat penuh')}
+}
+function compress(file){return new Promise((res,rej)=>{const r=new FileReader();r.onerror=rej;r.onload=()=>{const im=new Image();im.onerror=rej;
+  im.onload=()=>{const k=Math.min(1,800/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',0.6))};im.src=r.result};r.readAsDataURL(file)})}
+function thumbs(){const t=$('#thumbs');if(!t)return;
+  t.innerHTML=photos.map((d,i)=>`<div style="position:relative"><img src="${d}" style="width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--l)"><button type="button" data-rm="${i}" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:var(--r);color:#fff;cursor:pointer">×</button></div>`).join('')}
+async function showPhotos(id){
+  const a=S.acts.find(x=>x.id===id)||{},m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:#000c;z-index:20;overflow:auto;padding:14px';
+  m.innerHTML='<div style="max-width:720px;margin:0 auto;background:#fff;border-radius:10px;padding:14px"><b>Memuat foto...</b></div>';
+  document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.dataset.close)m.remove()};
+  try{const L=await getPhotos(id),nm=String(a.mitra||'mitra').replace(/[^\w-]+/g,'-');
+    m.firstChild.innerHTML=`<button class="btn d x" data-close="1" style="float:right">Tutup</button><h2 style="margin:0 0 10px">${esc(a.mitra)} · ${esc(a.tanggal)}</h2>`+
+    (L.map((d,i)=>`<p><img src="${d}" style="max-width:100%;border-radius:8px"><br><a class="btn s x" style="text-decoration:none;display:inline-block;margin-top:6px" download="foto-${nm}-${a.tanggal}-${i+1}.jpg" href="${d}">Unduh foto ${i+1}</a></p>`).join('')||'<p>Tidak ada foto.</p>')
+  }catch(e){m.firstChild.innerHTML='<button class="btn d x" data-close="1">Tutup</button><p>Foto gagal dimuat: '+esc(e.message)+'</p>'}
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(b)showPhotos(b.dataset.p)});
+const dims=u=>new Promise(r=>{const i=new Image();i.onload=()=>r([i.width,i.height]);i.onerror=()=>r([4,3]);i.src=u});
+async function exportData(L,name){
+  if(!window.ExcelJS)return exportCsv(L,name);
+  toast('Menyiapkan Excel...');
+  try{
+    L=[...L].sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
+    const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Aktivitas');
+    ws.addRow(["Tanggal","Anggota","Mitra","Alamat","Call","Visit","Jenis aktivitas","Program","Nominal donasi","Keterangan","KM awal","KM akhir","Total KM","Klaim BBM","Foto 1","Foto 2","Foto 3"]).font={bold:true};
+    [12,18,22,26,7,7,14,18,16,36,9,9,9,13,19,19,19].forEach((w,i)=>ws.getColumn(i+1).width=w);
+    ws.getColumn(9).numFmt='#,##0';ws.getColumn(14).numFmt='#,##0';ws.views=[{state:'frozen',ySplit:1}];
+    for(let i=0;i<L.length;i++){
+      const a=L[i];ws.addRow([a.tanggal,a.name,a.mitra,a.alamat,a.call,a.visit,a.jenis,a.program,a.nominal,a.ket,a.kmA,a.kmB,a.km,a.rp]);
+      if(a.nfoto){const ph=await getPhotos(a.id);ws.getRow(i+2).height=98;
+        for(let j=0;j<Math.min(3,ph.length);j++){const[w,h]=await dims(ph[j]),k=Math.min(125/w,92/h),id=wb.addImage({base64:ph[j],extension:'jpeg'});
+          ws.addImage(id,{tl:{col:14+j,row:i+1},ext:{width:Math.round(w*k),height:Math.round(h*k)}})}}
+    }
+    const buf=await wb.xlsx.writeBuffer(),a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));a.download=name+'.xlsx';a.click();toast('Excel siap diunduh');
+  }catch(e){toast('Excel gagal dibuat, mengunduh CSV');exportCsv(L,name)}
+}
 init();
 </script></body></html>
